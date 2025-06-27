@@ -1,0 +1,37 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Jupyter and notebook cache
+.ipynb_checkpoints/
+*.ipynb
+
+# Virtual environments
+venv/
+env/
+.quant_env/
+*.egg-info/
+
+# IDE/editor folders
+.vscode/
+.idea/
+
+# Data and cache
+data/
+*.csv
+*.h5
+*.parquet
+*.pkl
+.cache/
+*.log
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
