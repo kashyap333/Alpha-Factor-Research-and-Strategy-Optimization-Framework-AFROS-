@@ -9,6 +9,10 @@ def load_price_data():
     # Pivot long format to wide: index = Date, columns = Symbol, values = Close
     prices = df.pivot(index='Date', columns='Symbol', values='Close')
     prices = prices.sort_index()
+    columns= prices.columns.unique()
+    columns = columns[:20]
+    prices = prices[columns]
+    prices = prices[prices.index > '2023-01-01']# Limit to first 20 columns for performance
     return prices
 
 
