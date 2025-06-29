@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np
 
 
 def load_price_data():
@@ -16,12 +17,30 @@ def load_price_data():
     return prices
 
 
-def momentum_factor(lookback=20):
+def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thresh=15):
     """
-    Calculate momentum factor: past return over `lookback` days.
-    Returns a DataFrame with tickers as columns, dates as index, values as momentum scores.
+    Compute EWMA momentum and generate trade signals based on persistence.
+
+    Args:
+        price_df (DataFrame): Price data (dates x tickers).
+        span (int): EWMA span.
+        threshold (float): Momentum threshold to count as 'positive'.
+        min_days_above_thresh (int): Min # of days momentum must be above threshold in lookback window.
+
+    Returns:
+        momentum_df (DataFrame): EWMA momentum scores.
+        signal_df (DataFrame): Binary trade signals (1 = trade, 0 = ignore).
     """
-    prices = load_price_data()
-    momentum = prices.pct_change(lookback)
-    momentum = momentum.shift(1)  # Avoid lookahead bias
-    return momentum
+    log_returns = np.log(price_df / price_df.shift(1))
+    momentum_df = log_returns.ewm(span=span, adjust=False).mean().shift(1)
+
+    # Boolean mask where momentum is above threshold
+    positive_momentum = (momentum_df > threshold).astype(int)
+
+    # Rolling count of how many times momentum was above threshold
+    persistence_count = positive_momentum.rolling(window=span).sum()
+
+    # Signal only if count exceeds minimum required
+    signal_df = (persistence_count >= min_days_above_thresh).astype(int)
+
+    return momentum_df, signal_df
