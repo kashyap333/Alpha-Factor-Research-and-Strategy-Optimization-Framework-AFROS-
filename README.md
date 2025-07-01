@@ -143,7 +143,7 @@ AFROS/
 
 **Kashyap Melur Mahesh**
 Quantitative strategy researcher & data scientist
-[GitHub](https://github.com/kashyap333) | [LinkedIn](https://linkedin.com/in/kashyapmelur)
+[GitHub](https://github.com/kashyap333) | [LinkedIn](https://linkedin.com/in/kashyapmahesh)
 
 ---
 
