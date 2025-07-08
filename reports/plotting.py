@@ -2,36 +2,37 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-def plot_portfolio_performance_with_entry_split(performance_df, entry_date):
+def plot_portfolio_performance_with_entry_split(performance_df, entry_date, save_path="portfolio_plot.png"):
     """
-    Plot portfolio value over time, using a different color before and after entry_date.
+    Plot and save portfolio value and daily return with entry marker.
 
     Args:
-        performance_df (pd.DataFrame): DataFrame with 'date', 'portfolio_value', 'return_pct'.
-        entry_date (datetime.date or str): Entry date to split the plot.
+        performance_df (pd.DataFrame): DataFrame with 'date', 'portfolio_value', 'daily_return', etc.
+        entry_date (datetime.date or str): The date of portfolio entry.
+        save_path (str): Path to save the image (e.g., 'portfolio_plot.png').
     """
-    # Ensure datetime types
+    entry_date = pd.to_datetime(entry_date).date()
     performance_df['date'] = pd.to_datetime(performance_df['date'])
-    entry_date = pd.to_datetime(entry_date)
+    
+    fig, ax1 = plt.subplots(figsize=(12, 6))
 
-    # Split data before and after entry
-    before_entry = performance_df[performance_df['date'] < entry_date]
-    after_entry = performance_df[performance_df['date'] >= entry_date]
+    ax1.plot(performance_df['date'], performance_df['portfolio_value'], label="Portfolio Value", color="tab:blue")
+    ax1.axvline(entry_date, color='red', linestyle='--', label='Entry Date')
+    ax1.set_xlabel("Date")
+    ax1.set_ylabel("Portfolio Value ($)", color="tab:blue")
+    ax1.tick_params(axis='y', labelcolor="tab:blue")
 
-    # Plot
-    sns.set(style="whitegrid")
-    plt.figure(figsize=(12, 6))
+    ax2 = ax1.twinx()
+    ax2.plot(performance_df['date'], performance_df['daily_return'], label="Daily Return", color="tab:green", alpha=0.5)
+    ax2.set_ylabel("Daily Return (%)", color="tab:green")
+    ax2.tick_params(axis='y', labelcolor="tab:green")
 
-    # Plot pre-entry in gray
-    plt.plot(before_entry['date'], before_entry['cumulative_profit'], color='gray', linestyle='--', label='Before Entry')
+    fig.suptitle("Portfolio Performance with Entry Highlight")
+    fig.tight_layout()
+    fig.legend(loc="upper left")
 
-    # Plot post-entry in blue
-    plt.plot(after_entry['date'], after_entry['cumulative_profit'], color='tab:blue', linewidth=2, label='After Entry')
+    # Save image
+    plt.savefig(save_path, dpi=300)
+    print(f"Plot saved to: {save_path}")
 
-    plt.axvline(entry_date, color='black', linestyle=':', linewidth=1)
-    plt.title("Portfolio Value Over Time")
-    plt.xlabel("Date")
-    plt.ylabel("Portfolio Value ($)")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    plt.close()  # Close the figure to avoid showing in notebooks or re-renders
