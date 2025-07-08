@@ -38,3 +38,28 @@ def construct_kelly_portfolio(price_df, window=60, cap=1.0):
 
     weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
     return weights_df
+
+
+def scale_to_target_volatility(weights_df, returns_df, target_vol=0.10, freq=252):
+    """
+    Scale portfolio weights to achieve a target annualized volatility.
+
+    Args:
+        weights_df (DataFrame): Raw portfolio weights (dates x assets).
+        returns_df (DataFrame): Daily returns (dates x assets).
+        target_vol (float): Target annualized volatility (e.g. 0.10 = 10%).
+        freq (int): Frequency of trading (default: 252 for daily).
+
+    Returns:
+        DataFrame: Scaled weights.
+    """
+    port_returns = (returns_df * weights_df.shift(1)).sum(axis=1)
+    rolling_vol = port_returns.rolling(window=21).std() * np.sqrt(freq)
+
+    scaling_factors = target_vol / rolling_vol
+    scaling_factors = scaling_factors.clip(upper=2.0).fillna(1.0)  # Prevent overleverage
+
+    scaled_weights = weights_df.mul(scaling_factors, axis=0)
+    # Re-normalize to sum to 1
+    scaled_weights = scaled_weights.div(scaled_weights.sum(axis=1), axis=0).fillna(0)
+    return scaled_weights
