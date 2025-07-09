@@ -1,6 +1,7 @@
+import pandas as pd
 import pandas_market_calendars as mcal
 from datetime import datetime, timedelta
-import pandas as pd
+
 
 def get_trade_entry_exit_dates(begin_new_trading_period=True, holding_period=60):
     if not begin_new_trading_period:

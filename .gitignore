@@ -7,7 +7,7 @@ __pycache__/
 
 # Jupyter and notebook cache
 .ipynb_checkpoints/
-*.ipynb
+
 
 # Virtual environments
 venv/
