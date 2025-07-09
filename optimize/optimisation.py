@@ -1,8 +1,36 @@
-
-import numpy as np
 import pandas as pd
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+from riskfolio.Portfolio import Portfolio
+import pandas_market_calendars as mcal
+from datetime import datetime, timedelta
+from pathlib import Path
+import seaborn as sns
 
-def construct_kelly_portfolio(price_df, window=60, cap=1.0):
+
+def construct_risk_parity_portfolio_riskfolio(price_df, window=60):
+    returns = price_df.pct_change().dropna()
+    weights_list = []
+    dates = []
+
+    for i in range(window, len(returns)):
+        ret_window = returns.iloc[i - window:i]
+
+        port = Portfolio(returns=ret_window)
+        port.assets_stats(method_mu='hist', method_cov='hist')
+
+        # Risk parity model with classic covariance and min variance risk measure
+        w = port.optimization(model='Classic', rm='MV', obj='MinRisk')
+
+        weights_list.append(w.values.flatten())
+        dates.append(returns.index[i])
+
+    weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
+    return weights_df
+
+
+def construct_kelly_portfolio(price_df, window=60, cap=1.0, scale=False, target_vol=None):
     """
     Construct portfolio using the Kelly Criterion.
 
@@ -37,8 +65,12 @@ def construct_kelly_portfolio(price_df, window=60, cap=1.0):
         dates.append(returns.index[i])
 
     weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
+    
+    if scale:
+        returns_df = price_df.pct_change().dropna()
+        weights_df = scale_to_target_volatility(weights_df, returns_df, target_vol=target_vol)
+        
     return weights_df
-
 
 def scale_to_target_volatility(weights_df, returns_df, target_vol=0.10, freq=252):
     """

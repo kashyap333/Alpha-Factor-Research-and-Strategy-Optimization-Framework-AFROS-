@@ -1,28 +1,26 @@
-from factors.momentum import *
-from portfolio.risk_parity import *
-from optimize.kelly_risk import *
+from optimize.optimisation import *
 from backtest.backtest import *
 from metrics.metrics import *
+from data.data_loading import *
+from functions.functions import *
+from strategy.strategy import *
 
 def run_pipeline():
-    # Load prices (wide format)
+    # Load prices 
     price_df = load_price_data()
-    returns_df = price_df.pct_change().dropna()
+    price_df = price_df[price_df['Date'] < '2025-01-01']
 
     # Construct Kelly portfolio weights
-    kelly_weights = construct_kelly_portfolio(price_df, window=60)
+    kelly_weights = construct_kelly_portfolio(price_df, window=60, cap=0.01, scale=True, target_vol=0.05)
     
     # Calculate momentum (signals)
     momentum_scores, signals = ewma_momentum_signals(price_df)
-    print(signals)
+
     # Apply signal mask to Kelly weights
     filtered_kelly_weights = apply_signal_mask(kelly_weights, signals)
     
-    # Volatility targeting
-    vol_targeted_weights = scale_to_target_volatility(filtered_kelly_weights, returns_df, target_vol=0.05)
-    
     # Backtest portfolio with fixed holding period
-    kelly_returns = backtest_portfolio_holding_period(vol_targeted_weights, price_df, holding_period=60)
+    kelly_returns = backtest_portfolio_holding_period(filtered_kelly_weights, price_df, holding_period=60)
     
     # Calculate performance metrics
     metrics = performance_metrics(kelly_returns)
