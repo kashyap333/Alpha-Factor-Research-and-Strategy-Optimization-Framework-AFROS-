@@ -1,6 +1,6 @@
 # Alpha-Factor Research and Strategy Optimization Framework (AFROS)
 
-AFROS is a modular framework for researching, developing, and evaluating systematic trading strategies driven by alpha factors. It integrates signal generation, portfolio construction, and backtesting components in a clean, extensible architecture suitable for both academic-style research and real-world strategy prototyping.
+AFROS is a modular framework for researching, developing, and evaluating systematic trading strategies driven by alpha factors. It integrates signal generation, portfolio construction, and backtesting components in a clean, extensible architecture suitable for both academic-style research and real-world strategy prototyping. 
 
 ---
 
@@ -20,28 +20,17 @@ The framework currently focuses on **momentum-based factor investing** and is de
 
 ### 1. Signal Generation: `momentum.py`
 
-* Calculates **EWMA (Exponentially Weighted Moving Average)** momentum scores.
-* Applies **logarithmically increasing importance weights** over a rolling 20-day window.
-* Filters symbols by the **number of periods where momentum exceeds a threshold**.
+## Trend Following
 
-#### Highlights:
-
-* Reduces lookahead bias.
-* Captures persistence in momentum.
-* Produces binary signal matrix for investable universe filtering.
+* **EWMA (Exponentially Weighted Moving Average)** weighted moving average.
+* **SMA (Simple Moving average)**: Simple moving average crossover over long and short periods.
 
 ---
 
 ### 2. Portfolio Construction: `risk_parity.py`
 
-* Uses the **Riskfolio-Lib** library to compute portfolio weights via **risk parity**.
-* Allocates risk evenly among selected assets.
-* Operates on full asset universe, deferring signal filtering to post-optimization.
-
-#### Highlights:
-
-* Supports various risk models (e.g., MV, CVaR).
-* Modular structure allows future addition of other allocators.
+* **risk parity** : Allocates risk evenly among selected assets.
+* **kelly portfolio** : Allocates risk based of historic returns of assets.
 
 ---
 
@@ -64,26 +53,6 @@ The framework currently focuses on **momentum-based factor investing** and is de
 * Generates cumulative PnL time series.
 
 ---
-
-## 📊 Sample Strategy Flow
-
-```python
-# Load data
-price_df = load_price_data()
-
-# Generate momentum signals
-signal_df = compute_ewma_momentum(price_df, window=20, threshold=0.01)
-
-# Construct full portfolio weights (no filtering inside)
-raw_weights = construct_risk_parity_portfolio_riskfolio(price_df, window=60)
-
-# Apply signal-based filter
-filtered_weights = apply_signal_mask(raw_weights, signal_df)
-
-# Backtest with 20-day holding period
-portfolio_returns = backtest_portfolio_holding_period(filtered_weights, price_df, holding_period=20)
-```
-
 ---
 
 ## 🎯 Performance Metrics (optional modules)
