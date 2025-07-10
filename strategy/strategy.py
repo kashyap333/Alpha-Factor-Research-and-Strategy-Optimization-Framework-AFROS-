@@ -1,12 +1,6 @@
 import pandas as pd
-import os
 import matplotlib.pyplot as plt
 import numpy as np
-from riskfolio.Portfolio import Portfolio
-import pandas_market_calendars as mcal
-from datetime import datetime, timedelta
-from pathlib import Path
-import seaborn as sns
 
 
 def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thresh=15):
@@ -39,7 +33,7 @@ def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thr
 
     return momentum_df, signal_df
 
-def simple_moving_average(price_df, short_window=20, long_window=50):
+def simple_moving_average(price_df, short_window=20, long_window=90):
     """
     Compute simple moving averages and generate trade signals.
 
@@ -53,13 +47,15 @@ def simple_moving_average(price_df, short_window=20, long_window=50):
         sma_long (DataFrame): Long moving averages.
         signal_df (DataFrame): Binary trade signals (1 = buy, -1 = sell, 0 = hold).
     """
-    sma_short = price_df.rolling(window=short_window).mean()
-    sma_long = price_df.rolling(window=long_window).mean()
+    # Calculate lagged moving averages to avoid lookahead bias
+    sma_short = price_df.rolling(window=short_window).mean().shift(1)
+    sma_long = price_df.rolling(window=long_window).mean().shift(1)
 
-    # Generate signals
-    signal_df = pd.DataFrame(index=price_df.index, columns=price_df.columns)
-    signal_df[sma_short > sma_long] = 1  # Buy signal
-    signal_df[sma_short < sma_long] = -1  # Sell signal
-    signal_df.fillna(0, inplace=True)  # Hold signal
+    # Initialize signal dataframe
+    signal_df = pd.DataFrame(0, index=price_df.index, columns=price_df.columns)
+
+    # Generate signals: 1 = buy, -1 = sell, 0 = hold
+    signal_df[sma_short > sma_long] = 1
+    signal_df[sma_short < sma_long] = -1
 
     return sma_short, sma_long, signal_df
