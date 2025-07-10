@@ -1,40 +1,40 @@
-import pandas as pd
-
-def backtest_portfolio_holding_period(weights_df, price_df, holding_period=60):
+def backtest_weighted_signal_strategy(price_df, weights_df, signal_df=None, trading_days=252, risk_free_rate=0.0):
     """
-    Backtest portfolio returns with a fixed holding period.
+    Generic backtest function combining weights and optional trade signals,
+    with performance metrics calculated.
 
     Args:
-        weights_df (DataFrame): Daily portfolio weights (dates x tickers).
-        price_df (DataFrame): Daily price data (dates x tickers).
-        holding_period (int): Holding period in days.
+        price_df (DataFrame): Price data (dates x tickers).
+        weights_df (DataFrame): Raw portfolio weights (already time-aligned).
+        signal_df (DataFrame, optional): Binary trade signals (1 = buy, else 0).
+        trading_days (int): Number of trading days per year for annualization.
+        risk_free_rate (float): Annual risk-free rate, e.g., 0.0 or 0.01.
 
     Returns:
-        Series: Portfolio returns aligned with price_df.
+        dict with keys:
+            'portfolio_value' (Series): Cumulative portfolio value.
+            'daily_returns' (Series): Daily portfolio returns.
+            'weights' (DataFrame): Final signal-adjusted weights.
+            'metrics' (dict): Performance metrics (cumulative return, Sharpe, max drawdown).
     """
-    returns = price_df.pct_change().shift(-1).fillna(0)
-    weights_df = weights_df.shift(1).reindex_like(returns).fillna(0)
+    # Apply signals if given
+    if signal_df is not None:
+        masked_weights = weights_df.where(signal_df == 1, 0.0)
+        final_weights = masked_weights.div(masked_weights.sum(axis=1), axis=0).fillna(0)
+    else:
+        final_weights = weights_df.div(weights_df.sum(axis=1), axis=0).fillna(0)
 
-    portfolio_returns = pd.Series(0.0, index=returns.index)
+    asset_returns = price_df.pct_change().reindex(final_weights.index)
+    daily_returns = (final_weights * asset_returns).sum(axis=1)
 
-    # Rebalance every `holding_period` days
-    rebalance_dates = weights_df.index[::holding_period]
+    portfolio_value = (1 + daily_returns).cumprod()
+    portfolio_value.iloc[0] = 1
 
-    for rebalance_date in rebalance_dates:
-        if rebalance_date not in weights_df.index:
-            continue
+    metrics = performance_metrics(daily_returns, trading_days, risk_free_rate)
 
-        w = weights_df.loc[rebalance_date].values
-        start_idx = returns.index.get_loc(rebalance_date)
-
-        # Determine end of holding period
-        end_idx = min(start_idx + holding_period, len(returns))
-        window = returns.iloc[start_idx:end_idx]
-
-        # Apply same weights across holding period
-        pnl = window @ w
-        portfolio_returns.iloc[start_idx:end_idx] = pnl.values
-
-    return portfolio_returns
-
-
+    return {
+        'portfolio_value': portfolio_value,
+        'daily_returns': daily_returns,
+        'weights': final_weights,
+        'metrics': metrics
+    }
