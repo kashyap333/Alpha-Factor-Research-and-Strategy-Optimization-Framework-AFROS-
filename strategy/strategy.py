@@ -1,12 +1,6 @@
 import pandas as pd
-import os
 import matplotlib.pyplot as plt
 import numpy as np
-from riskfolio.Portfolio import Portfolio
-import pandas_market_calendars as mcal
-from datetime import datetime, timedelta
-from pathlib import Path
-import seaborn as sns
 
 
 def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thresh=15):
