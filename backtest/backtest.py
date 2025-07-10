@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 def backtest_portfolio_holding_period(weights_df, price_df, holding_period=60):
