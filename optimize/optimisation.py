@@ -24,7 +24,7 @@ def risk_parity(price_df, window=60, rolling=False):
     port = Portfolio(returns=returns.iloc[-window:])
     port.assets_stats(method_mu='hist', method_cov='hist')
     return port.rp_optimization(model='Classic', rm='MV')
-s
+
 
 def construct_kelly_portfolio(price_df, window=60, cap=1.0, scale=False, target_vol=None):
     """
