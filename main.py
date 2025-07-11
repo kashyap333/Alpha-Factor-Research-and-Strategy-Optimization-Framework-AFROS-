@@ -20,7 +20,7 @@ def run_pipeline():
     filtered_kelly_weights = apply_signal_mask(kelly_weights, signals)
     
     # Backtest portfolio with fixed holding period
-    kelly_returns = backtest_portfolio_holding_period(filtered_kelly_weights, price_df, holding_period=60)
+    kelly_returns = backtest_weighted_signal_strategy(filtered_kelly_weights, price_df, holding_period=60)
     
     # Calculate performance metrics
     metrics = performance_metrics(kelly_returns)
