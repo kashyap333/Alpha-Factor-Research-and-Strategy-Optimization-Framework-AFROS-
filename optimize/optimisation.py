@@ -24,7 +24,7 @@ def risk_parity(price_df, window=60, rolling=False):
     port = Portfolio(returns=returns.iloc[-window:])
     port.assets_stats(method_mu='hist', method_cov='hist')
     return port.rp_optimization(model='Classic', rm='MV')
-
+s
 
 def construct_kelly_portfolio(price_df, window=60, cap=1.0, scale=False, target_vol=None):
     """
@@ -139,51 +139,34 @@ def construct_equal_weight_portfolio(price_df, window=60):
     return weights_df
 
 
-def maximum_sharpe_ratio(price_df, risk_free_rate=0.0):
-    """
-    Calculate the Maximum Sharpe Ratio portfolio weights.
-
-    Args:
-        price_df (DataFrame): Asset price data (dates x tickers).
-        risk_free_rate (float): Risk-free rate (default 0.0).
-
-    Returns:
-        weights (Series): The portfolio weights that maximize the Sharpe ratio.
-        sharpe_ratio (float): The maximum Sharpe ratio achieved.
-    """
-    # Step 1: Calculate daily returns
+def rolling_max_sharpe(price_df, window=60, risk_free_rate=0.0):
     returns = price_df.pct_change().dropna()
+    weights_list = []
+    dates = []
 
-    # Step 2: Calculate expected returns and covariance matrix
-    mean_returns = returns.mean()
-    cov_matrix = returns.cov()
+    for i in range(window, len(returns)):
+        window_data = returns.iloc[i - window:i]
+        mean_returns = window_data.mean()
+        cov_matrix = window_data.cov()
 
-    # Step 3: Define the objective function to minimize (negative Sharpe ratio)
-    def objective_function(weights):
-        # Portfolio return
-        port_return = np.dot(weights, mean_returns)
-        # Portfolio volatility
-        port_volatility = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-        # Sharpe ratio (risk-free rate is subtracted from portfolio return)
-        sharpe_ratio = (port_return - risk_free_rate) / port_volatility
-        # Minimize negative Sharpe ratio to maximize it
-        return -sharpe_ratio
+        def objective_function(weights):
+            port_return = np.dot(weights, mean_returns)
+            port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+            return -((port_return - risk_free_rate) / port_vol)
 
-    # Step 4: Constraints: weights sum to 1 and no short selling (weights between 0 and 1)
-    num_assets = len(mean_returns)
-    constraints = ({'type': 'eq', 'fun': lambda weights: np.sum(weights) - 1})  # Weights sum to 1
-    bounds = tuple((0, 1) for _ in range(num_assets))  # No short-selling (weights between 0 and 1)
+        num_assets = len(mean_returns)
+        bounds = tuple((0, 1) for _ in range(num_assets))
+        constraints = {'type': 'eq', 'fun': lambda w: np.sum(w) - 1}
+        initial_guess = [1 / num_assets] * num_assets
 
-    # Step 5: Initial guess for the optimizer (equal distribution)
-    initial_guess = [1.0 / num_assets] * num_assets
+        result = sco.minimize(objective_function, initial_guess, method='SLSQP', bounds=bounds, constraints=constraints)
 
-    # Step 6: Optimize weights using a solver (Minimize the negative Sharpe ratio)
-    result = sco.minimize(objective_function, initial_guess, method='SLSQP', bounds=bounds, constraints=constraints)
+        if result.success:
+            weights_list.append(result.x)
+        else:
+            weights_list.append(np.full(num_assets, 1 / num_assets))  # fallback: equal weight
 
-    # Step 7: Get the optimized weights and the Sharpe ratio
-    optimal_weights = result.x
-    max_sharpe_ratio = -result.fun  # The result of optimization is negative, so negate it
+        dates.append(returns.index[i])
 
-    # Step 8: Return the results
-    weights = pd.Series(optimal_weights, index=mean_returns.index)
-    return weights, max_sharpe_ratio
+    weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
+    return weights_df
