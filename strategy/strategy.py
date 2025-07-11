@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thresh=15):
+def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thresh=5):
     """
     Compute EWMA momentum and generate trade signals based on persistence.
 
@@ -16,9 +16,12 @@ def ewma_momentum_signals(price_df, span=60, threshold=0.001, min_days_above_thr
     Returns:
         momentum_df (DataFrame): EWMA momentum scores.
         signal_df (DataFrame): Binary trade signals (1 = trade, 0 = ignore).
+
     """
-    log_returns = np.log(price_df / price_df.shift(1))
-    momentum_df = log_returns.ewm(span=span, adjust=False).mean().shift(1)
+
+    shifted_prices = price_df.shift(1)
+    log_returns = np.log(price_df / shifted_prices)
+    momentum_df = log_returns.ewm(span=span, adjust=False).mean()
 
     # Boolean mask where momentum is above threshold
     positive_momentum = (momentum_df > threshold).astype(int)

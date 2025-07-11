@@ -1,3 +1,5 @@
+from metrics.metrics import *
+
 def backtest_weighted_signal_strategy(price_df, weights_df, signal_df=None, trading_days=252, risk_free_rate=0.0):
     """
     Generic backtest function combining weights and optional trade signals,
@@ -25,16 +27,11 @@ def backtest_weighted_signal_strategy(price_df, weights_df, signal_df=None, trad
         final_weights = weights_df.div(weights_df.sum(axis=1), axis=0).fillna(0)
 
     asset_returns = price_df.pct_change().reindex(final_weights.index)
-    daily_returns = (final_weights * asset_returns).sum(axis=1)
+    daily_returns = (final_weights.shift(1) * asset_returns).sum(axis=1)
 
     portfolio_value = (1 + daily_returns).cumprod()
     portfolio_value.iloc[0] = 1
 
-    metrics = performance_metrics(daily_returns, trading_days, risk_free_rate)
+    metrics = performance_metrics(daily_returns, risk_free_rate)
 
-    return {
-        'portfolio_value': portfolio_value,
-        'daily_returns': daily_returns,
-        'weights': final_weights,
-        'metrics': metrics
-    }
+    return metrics
