@@ -2,61 +2,48 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-def plot_portfolio_performance_with_entry_split(performance_df, entry_date):
+def backtest_metrics_close_to_close(price_df, combined_weights, freq=252):
+    returns = backtest_close_to_close(price_df, combined_weights)
+    cumulative_return = (1 + returns).prod() - 1
+    annualized_return = (1 + cumulative_return) ** (freq / len(returns)) - 1
+    volatility = returns.std() * np.sqrt(freq)
+    sharpe = annualized_return / volatility if volatility != 0 else np.nan
+    metrics = {
+        "Cumulative Return": cumulative_return,
+        "Annualized Return": annualized_return,
+        "Annualized Volatility": volatility,
+        "Sharpe Ratio": sharpe,
+    }
+    return returns, metrics
+
+def plot_performance(portfolio_returns):
     """
-    Plot portfolio value over time, using a different color before and after entry_date.
+    Plot cumulative returns and cumulative Sharpe ratio (progressive).
 
     Args:
-        performance_df (pd.DataFrame): DataFrame with 'date', 'portfolio_value', 'return_pct'.
-        entry_date (datetime.date or str): Entry date to split the plot.
+        portfolio_returns (pd.Series): Daily portfolio returns.
     """
-    # Ensure datetime types
-    performance_df['date'] = pd.to_datetime(performance_df['date'])
-    entry_date = pd.to_datetime(entry_date)
+    cumulative_returns = (1 + portfolio_returns).cumprod() - 1
 
-    # Split data before and after entry
-    before_entry = performance_df[performance_df['date'] < entry_date]
-    after_entry = performance_df[performance_df['date'] >= entry_date]
+    # Cumulative Sharpe ratio (annualized)
+    cum_mean = portfolio_returns.expanding().mean()
+    cum_std = portfolio_returns.expanding().std()
+    cumulative_sharpe = (cum_mean / cum_std.replace(0, np.nan)) * np.sqrt(252)
 
-    # Plot
-    sns.set(style="whitegrid")
-    plt.figure(figsize=(12, 6))
+    fig, ax1 = plt.subplots(figsize=(12, 6))
 
-    # Plot pre-entry in gray
-    plt.plot(before_entry['date'], before_entry['cumulative_profit'], color='gray', linestyle='--', label='Before Entry')
+    ax1.plot(cumulative_returns.index, cumulative_returns, label="Cumulative Return", color='blue')
+    ax1.legend(loc='upper left')
+    ax1.set_ylabel("Cumulative Return", color='blue')
+    ax1.tick_params(axis='y', labelcolor='blue')
+    ax1.grid(True)
 
-    # Plot post-entry in blue
-    plt.plot(after_entry['date'], after_entry['cumulative_profit'], color='tab:blue', linewidth=2, label='After Entry')
+    ax2 = ax1.twinx()
+    ax2.plot(cumulative_sharpe.index, cumulative_sharpe, label="Cumulative Sharpe Ratio", color='green')
+    ax2.set_ylabel("Cumulative Sharpe Ratio", color='green')
+    ax2.tick_params(axis='y', labelcolor='green')
 
-    plt.axvline(entry_date, color='black', linestyle=':', linewidth=1)
-    plt.title("Portfolio Value Over Time")
-    plt.xlabel("Date")
-    plt.ylabel("Portfolio Value ($)")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-def plot_rolling_sharpe_ratio(performance_df, window=1):
-    """
-    Plot rolling Sharpe ratio over time.
-
-    Args:
-        performance_df (pd.DataFrame): Must contain 'date' and 'daily_return'.
-        window (int): Rolling window size in days.
-        risk_free_rate_annual (float): Annualized risk-free rate (e.g., 0.05 for 5%).
-    """
-    # Ensure proper types
-    performance_df['date'] = pd.to_datetime(performance_df['date'])
-    performance_df = performance_df.sort_values('date')
-    
-
-    # Plot
-    plt.figure(figsize=(12, 6))
-    plt.plot(performance_df['date'], performance_df['sharpe_ratio'], label='Sharpe', color='tab:green')
-    plt.axhline(0, color='gray', linestyle='--')
-    plt.title(f"{window}-Day Rolling Sharpe Ratio Over Time")
-    plt.xlabel("Date")
-    plt.ylabel("Sharpe Ratio")
-    plt.legend()
-    plt.tight_layout()
+    ax2.legend(loc='upper right')
+    plt.title("Strategy Performance")
+    fig.tight_layout()
     plt.show()

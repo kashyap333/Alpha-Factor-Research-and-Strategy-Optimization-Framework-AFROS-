@@ -1,17 +1,23 @@
 import pandas as pd
 import os
 import numpy as np
+from datetime import datetime
 
-
-def load_price_data(last_date='2023-01-01'):
-    filepath = os.path.join('D:\\Quant\\Data', f"master_stock_data.csv")
+def load_price_data(start_date='2020-01-01', end_date=datetime.today()):
+    if end_date is None:
+        end_date = datetime.now()
+    
+    filepath = os.path.join('D:\\Quant\\Data', "master_stock_data.csv")
     df = pd.read_csv(filepath, parse_dates=['Date'])
     
-    # Pivot long format to wide: index = Date, columns = Symbol, values = Close
-    prices = df.pivot(index='Date', columns='Symbol', values='Close')
-    prices = prices.sort_index()
-    columns= prices.columns.unique()
-    columns = columns[:20]
-    prices = prices[columns]
-    prices = prices[prices.index > last_date]# Limit to first 20 columns for performance
-    return prices
+    # Set Date as index
+    df.set_index('Date', inplace=True)
+
+    # Convert start_date and end_date to Timestamp if not already
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+    
+    # Filter by date range on index
+    filtered_df = df.loc[(df.index > start_date) & (df.index <= end_date)]
+    
+    return filtered_df

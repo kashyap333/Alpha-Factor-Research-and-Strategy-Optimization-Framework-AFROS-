@@ -4,8 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from riskfolio.Portfolio import Portfolio
 import scipy.optimize as sco
+from asset_selection.selection_functions import *
 
-def risk_parity(price_df, window=60, rolling=False):
+def risk_parity(df, window=60, rolling=False, price_column="Close"):
+    df = df.reset_index()
+    price_df = df.pivot(index='Date', columns='Symbol', values=price_column)
     returns = price_df.pct_change().dropna()
 
     if rolling:
@@ -19,40 +22,28 @@ def risk_parity(price_df, window=60, rolling=False):
             weights_list.append(w.values.flatten())
             dates.append(returns.index[i])
         return pd.DataFrame(weights_list, index=dates, columns=returns.columns)
-    
-    # Single shot
+
     port = Portfolio(returns=returns.iloc[-window:])
     port.assets_stats(method_mu='hist', method_cov='hist')
     return port.rp_optimization(model='Classic', rm='MV')
 
-
-def construct_kelly_portfolio(price_df, window=60, cap=1.0, scale=False, target_vol=None):
-    """
-    Construct portfolio using the Kelly Criterion.
-
-    Args:
-        price_df (DataFrame): Price data (dates x tickers).
-        window (int): Lookback window to estimate mu and sigma.
-        cap (float): Max allocation to any asset (after normalization).
-
-    Returns:
-        DataFrame: Kelly weights (dates x tickers).
-    """
+def construct_kelly_portfolio(df, window=60, cap=1.0, price_column="Close", scale=False, target_vol=None):
+    df = df.reset_index()
+    price_df = df.pivot(index='Date', columns='Symbol', values=price_column)
     returns = price_df.pct_change().dropna()
     weights_list = []
     dates = []
 
     for i in range(window, len(returns)):
         ret_window = returns.iloc[i - window:i]
-        mu = ret_window.mean().values  # Expected returns (daily)
-        sigma = ret_window.cov().values  # Covariance matrix
+        mu = ret_window.mean().values
+        sigma = ret_window.cov().values
 
         try:
-            kelly_weights = np.linalg.solve(sigma, mu)  # w = Σ⁻¹μ
+            kelly_weights = np.linalg.solve(sigma, mu)
         except np.linalg.LinAlgError:
             kelly_weights = np.zeros(len(mu))
 
-        # Normalize to sum to 1 (or 0 if all zero)
         kelly_weights = np.clip(kelly_weights, 0, cap)
         if kelly_weights.sum() > 0:
             kelly_weights /= kelly_weights.sum()
@@ -61,85 +52,70 @@ def construct_kelly_portfolio(price_df, window=60, cap=1.0, scale=False, target_
         dates.append(returns.index[i])
 
     weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
-    
+
     if scale:
         returns_df = price_df.pct_change().dropna()
         weights_df = scale_to_target_volatility(weights_df, returns_df, target_vol=target_vol)
-        
+
     return weights_df
 
 
-def scale_to_target_volatility(weights_df, returns_df, target_vol=0.10, freq=252):
+
+def scale_to_target_volatility(weights_df, df, price_column="Close", target_vol=0.10, freq=252):
     """
     Scale portfolio weights to achieve a target annualized volatility.
 
     Args:
         weights_df (DataFrame): Raw portfolio weights (dates x assets).
-        returns_df (DataFrame): Daily returns (dates x assets).
+        long_df (DataFrame): Long-format price data with Date index and 'Symbol' column.
+        price_column (str): Which price column to use for returns calculation.
         target_vol (float): Target annualized volatility (e.g. 0.10 = 10%).
         freq (int): Frequency of trading (default: 252 for daily).
 
     Returns:
         DataFrame: Scaled weights.
     """
+    # Prepare price_df wide-format from long_df
+    price_df = df.reset_index().pivot(index='Date', columns='Symbol', values=price_column)
+
+    # Calculate daily returns aligned with weights_df index & columns
+    returns_df = price_df.pct_change().loc[weights_df.index, weights_df.columns]
+
+    # Calculate portfolio returns (weights shifted by 1 to avoid lookahead bias)
     port_returns = (returns_df * weights_df.shift(1)).sum(axis=1)
+
+    # Calculate rolling volatility of portfolio returns (21-day window)
     rolling_vol = port_returns.rolling(window=21).std() * np.sqrt(freq)
 
+    # Compute scaling factors to hit target volatility
     scaling_factors = target_vol / rolling_vol
-    scaling_factors = scaling_factors.clip(upper=2.0).fillna(1.0)  # Prevent overleverage
+    scaling_factors = scaling_factors.clip(upper=2.0).fillna(1.0)  # Avoid too high leverage or NaNs
 
+    # Apply scaling to weights
     scaled_weights = weights_df.mul(scaling_factors, axis=0)
-    # Re-normalize to sum to 1
+
+    # Re-normalize weights so each day sums to 1
     scaled_weights = scaled_weights.div(scaled_weights.sum(axis=1), axis=0).fillna(0)
+
     return scaled_weights
 
-def inverse_volatility_weights(price_df, lookback=60):
-    """
-    Calculate daily inverse volatility weights using rolling window,
-    with no lookahead bias (uses data up to t-1).
 
-    Args:
-        price_df (DataFrame): Price data (dates x tickers).
-        lookback (int): Rolling window for volatility calculation.
 
-    Returns:
-        weights_df (DataFrame): Inverse volatility-based weights for each date.
-    """
+def inverse_volatility_weights(df, lookback=60, price_column="Close"):
+    # Reset index so Date becomes a column for pivoting
+    df = df.reset_index()
+    
+    price_df = df.pivot(index='Date', columns='Symbol', values=price_column)
     returns = price_df.pct_change()
-    rolling_vol = returns.rolling(window=lookback).std().shift(1)  # <-- shift to prevent lookahead
-
+    rolling_vol = returns.rolling(window=lookback).std().shift(1)  # Shift to avoid lookahead bias
     inv_vol = 1 / rolling_vol
     weights_df = inv_vol.div(inv_vol.sum(axis=1), axis=0)
-
-    return weights_df
-
-def construct_equal_weight_portfolio(price_df, window=60):
-    """
-    Construct an equal-weight portfolio over time.
-
-    Args:
-        price_df (DataFrame): Price data (dates x tickers).
-        window (int): Start calculating weights only after this window (for alignment with others).
-
-    Returns:
-        DataFrame: Equal weights (dates x tickers).
-    """
-    returns = price_df.pct_change().dropna()
-    n_assets = price_df.shape[1]
-    equal_weight = np.full(n_assets, 1 / n_assets)
-    
-    weights_list = []
-    dates = []
-
-    for i in range(window, len(returns)):
-        weights_list.append(equal_weight)
-        dates.append(returns.index[i])
-    
-    weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
     return weights_df
 
 
-def rolling_max_sharpe(price_df, window=60, risk_free_rate=0.0):
+def rolling_max_sharpe(df, window=60, risk_free_rate=0.0, price_column="Close"):
+    df = df.reset_index()
+    price_df = df.pivot(index='Date', columns='Symbol', values=price_column)
     returns = price_df.pct_change().dropna()
     weights_list = []
     dates = []
@@ -164,9 +140,38 @@ def rolling_max_sharpe(price_df, window=60, risk_free_rate=0.0):
         if result.success:
             weights_list.append(result.x)
         else:
-            weights_list.append(np.full(num_assets, 1 / num_assets))  # fallback: equal weight
+            weights_list.append(np.full(num_assets, 1 / num_assets))
 
         dates.append(returns.index[i])
 
-    weights_df = pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
-    return weights_df
+    return pd.DataFrame(weights_list, index=dates, columns=price_df.columns)
+
+
+def compute_combined_weights_for_date(price_df, date):
+    # Make sure Date is a column
+    date = pd.to_datetime(date)
+    price_df.index = pd.to_datetime(price_df.index)
+    df = price_df[price_df.index <= date]
+    safe_assets = filter_by_var(df)
+    price_df = df[df['Symbol'].isin(safe_assets)]
+
+    # Step 2: Filter by volatility
+    stable_assets = filter_by_volatility(price_df=price_df)
+    price_df = price_df[price_df['Symbol'].isin(stable_assets)]
+
+    # Step 3: Filter by trend
+    trending_assets = filter_by_trend(price_df=price_df)
+    price_df = price_df[price_df['Symbol'].isin(trending_assets)]
+
+    # Step 4: Filter by correlation
+    final_assets, corr_matrix = filter_by_correlation(price_df, corr_threshold=0.3)
+    final_price_df = price_df[price_df['Symbol'].isin(final_assets)]
+
+    momentum_df, signals = ewma_momentum_signals(final_price_df, span=60, threshold=0.002, min_days_above_thresh=5)
+    long_signals = signals.clip(lower=0)
+    
+    weights = inverse_volatility_weights(final_price_df)
+    final_weights = long_signals * weights
+    final_weights = final_weights.div(final_weights.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
+
+    return final_weights
