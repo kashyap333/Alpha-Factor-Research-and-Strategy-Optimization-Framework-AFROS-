@@ -1,6 +1,7 @@
 from metrics.metrics import *
 import pandas as pd
 from reports.plotting import *
+import numpy as np
 
 def backtest_close_to_close(price_df, combined_weights):
     """
