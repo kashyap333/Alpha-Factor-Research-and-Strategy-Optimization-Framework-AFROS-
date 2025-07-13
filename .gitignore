@@ -20,7 +20,6 @@ env/
 .idea/
 
 # Data and cache
-*.csv
 *.h5
 *.parquet
 *.pkl
