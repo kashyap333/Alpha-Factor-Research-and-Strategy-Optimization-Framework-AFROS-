@@ -1,37 +1,142 @@
 from metrics.metrics import *
+import pandas as pd
+from reports.plotting import *
 
-def backtest_weighted_signal_strategy(price_df, weights_df, signal_df=None, trading_days=252, risk_free_rate=0.0):
+def backtest_close_to_close(price_df, combined_weights):
     """
-    Generic backtest function combining weights and optional trade signals,
-    with performance metrics calculated.
+    Backtest portfolio returns using close-to-close prices daily weight updates
 
     Args:
-        price_df (DataFrame): Price data (dates x tickers).
-        weights_df (DataFrame): Raw portfolio weights (already time-aligned).
-        signal_df (DataFrame, optional): Binary trade signals (1 = buy, else 0).
-        trading_days (int): Number of trading days per year for annualization.
-        risk_free_rate (float): Annual risk-free rate, e.g., 0.0 or 0.01.
+        price_df (DataFrame): Long format with Date index and Symbol column, must have 'Close'.
+        combined_weights (DataFrame): Wide format, index=Date, columns=Symbols, daily weights.
 
     Returns:
-        dict with keys:
-            'portfolio_value' (Series): Cumulative portfolio value.
-            'daily_returns' (Series): Daily portfolio returns.
-            'weights' (DataFrame): Final signal-adjusted weights.
-            'metrics' (dict): Performance metrics (cumulative return, Sharpe, max drawdown).
+        pd.Series: Daily portfolio returns indexed by Date.
     """
-    # Apply signals if given
-    if signal_df is not None:
-        masked_weights = weights_df.where(signal_df == 1, 0.0)
-        final_weights = masked_weights.div(masked_weights.sum(axis=1), axis=0).fillna(0)
+    price_df = price_df.sort_index()
+    all_dates = sorted(set(price_df.index.unique()) & set(combined_weights.index))
+
+    portfolio_returns = []
+    portfolio_dates = []
+
+    for i in range(1, len(all_dates)):
+        prev_date = all_dates[i - 1]
+        curr_date = all_dates[i]
+
+        if prev_date not in combined_weights.index:
+            portfolio_dates.append(curr_date)
+            portfolio_returns.append(0)
+            continue
+
+        weights = combined_weights.loc[prev_date]
+
+        close_prev = price_df.loc[prev_date].set_index('Symbol')['Close']
+        close_curr = price_df.loc[curr_date].set_index('Symbol')['Close']
+
+        asset_returns = (close_curr / close_prev - 1).reindex(weights.index).fillna(0)
+
+        port_return = (weights * asset_returns).sum()
+        portfolio_dates.append(curr_date)
+        portfolio_returns.append(port_return)
+
+    return pd.Series(portfolio_returns, index=portfolio_dates).sort_index()
+
+
+def backtest_metrics_close_to_close(price_df, combined_weights, freq=252):
+    returns = backtest_close_to_close(price_df, combined_weights)
+    cumulative_return = (1 + returns).prod() - 1
+    annualized_return = (1 + cumulative_return) ** (freq / len(returns)) - 1
+    volatility = returns.std() * np.sqrt(freq)
+    sharpe = annualized_return / volatility if volatility != 0 else np.nan
+    metrics = {
+        "Cumulative Return": cumulative_return,
+        "Annualized Return": annualized_return,
+        "Annualized Volatility": volatility,
+        "Sharpe Ratio": sharpe,
+    }
+    return returns, metrics
+
+
+def backtest_with_rebalancing(price_df, compute_combined_weights_fn, rebalance_freq=1, capital=100000, start_date=None, plot_progress=False):
+    price_df = price_df.copy()
+    price_df.index = pd.to_datetime(price_df.index)
+    all_dates = sorted(price_df.index.unique())
+
+    if start_date is not None:
+        start_date = pd.to_datetime(start_date)
+        trading_dates = [d for d in all_dates if d >= start_date]
+        pre_start_dates = [d for d in all_dates if d < start_date]
     else:
-        final_weights = weights_df.div(weights_df.sum(axis=1), axis=0).fillna(0)
+        trading_dates = all_dates
+        pre_start_dates = []
 
-    asset_returns = price_df.pct_change().reindex(final_weights.index)
-    daily_returns = (final_weights.shift(1) * asset_returns).sum(axis=1)
+    portfolio_value = capital
+    portfolio_returns = []
+    portfolio_dates = []
+    last_rebalance_idx = 0
+    current_weights = pd.Series(dtype=float)
 
-    portfolio_value = (1 + daily_returns).cumprod()
-    portfolio_value.iloc[0] = 1
+    # Pre-start filler
+    for d in pre_start_dates:
+        portfolio_dates.append(d)
+        portfolio_returns.append(0)
 
-    metrics = performance_metrics(daily_returns, risk_free_rate)
+    if not trading_dates:
+        raise ValueError("No trading dates available on or after start_date")
 
-    return metrics
+    # Initial weight load
+    try:
+        full_weights = compute_combined_weights_fn(price_df, trading_dates[0])
+        current_weights = full_weights.loc[trading_dates[0]]
+    except Exception as e:
+        print(f"[ERROR] Failed initial weight computation: {e}")
+        current_weights = pd.Series(dtype=float)
+
+    # Main loop
+    for i in range(1, len(trading_dates)):
+        curr_date = trading_dates[i]
+
+        # Rebalance
+        if (i - last_rebalance_idx) >= rebalance_freq:
+            rebalance_date = trading_dates[i - 1]
+            try:
+                full_weights = compute_combined_weights_fn(price_df, rebalance_date)
+                current_weights = full_weights.loc[rebalance_date]
+                last_rebalance_idx = i
+            except Exception as e:
+                print(f"[WARN] Failed rebalance at {rebalance_date.date()}: {e}")
+                current_weights = pd.Series(dtype=float)
+
+        # Skip if weights are empty
+        if current_weights.empty:
+            print(f"[SKIP] No weights on {curr_date.date()}")
+            portfolio_dates.append(curr_date)
+            portfolio_returns.append(0)
+            continue
+
+        try:
+            close_prev = price_df.loc[trading_dates[i - 1]].set_index('Symbol')['Close']
+            close_curr = price_df.loc[curr_date].set_index('Symbol')['Close']
+            asset_returns = (close_curr / close_prev - 1).reindex(current_weights.index).fillna(0)
+            port_return = (current_weights * asset_returns).sum()
+        except Exception as e:
+            print(f"[ERROR] Return calc failed on {curr_date.date()}: {e}")
+            port_return = 0
+
+        portfolio_value *= (1 + port_return)
+        portfolio_returns.append(port_return)
+        portfolio_dates.append(curr_date)
+
+    # Final performance DF
+    performance_df = pd.DataFrame({
+        'Date': portfolio_dates,
+        'Daily Return': portfolio_returns
+    })
+    performance_df['Cumulative Return'] = (1 + performance_df['Daily Return']).cumprod() - 1
+    performance_df['Portfolio Value'] = capital * (1 + performance_df['Cumulative Return'])
+    performance_df.set_index('Date', inplace=True)
+
+    if plot_progress:
+        plot_performance(performance_df['Daily Return'])
+
+    return performance_df
