@@ -1,6 +1,7 @@
 import pandas as pd
-import pandas as pd
+import numpy as np
 from scipy.stats import skew
+from scipy.stats import norm
 
 def filter_by_var(price_df, confidence_level=0.95, var_threshold=-0.05, lookback=252, method='historical'):
     returns = price_df.groupby('Symbol')['Close'].apply(lambda x: x.pct_change()).dropna()

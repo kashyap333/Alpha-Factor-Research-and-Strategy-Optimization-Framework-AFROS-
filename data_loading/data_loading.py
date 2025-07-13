@@ -3,11 +3,11 @@ import os
 import numpy as np
 from datetime import datetime
 
-def load_price_data(start_date='2020-01-01', end_date=datetime.today()):
+def load_price_data(start_date='2020-01-01', end_date=datetime.today(), path="D:\\Quant\\afros\\data\\master_stock_data.csv"):
     if end_date is None:
         end_date = datetime.now()
     
-    filepath = os.path.join('D:\\Quant\\Data', "master_stock_data.csv")
+    filepath = path
     df = pd.read_csv(filepath, parse_dates=['Date'])
     
     # Set Date as index

@@ -1,35 +1,45 @@
 from optimize.optimisation import *
 from backtest.backtest import *
 from metrics.metrics import *
-from data.data_loading import *
+from data_loading.data_loading import *
 from functions.functions import *
 from strategy.strategy import *
+import numpy as np
 
-def run_pipeline():
-    # Load prices 
-    price_df = load_price_data()
-    price_df = price_df[price_df['Date'] < '2025-01-01']
+def run_pipeline(date):
+    
+    df = load_price_data()
+    # Make sure Date is a column
+    date = pd.to_datetime(date)
+    df.index = pd.to_datetime(df.index)
+    df = df[df.index <= date]
+    safe_assets = filter_by_var(df)
+    price_df = df[df['Symbol'].isin(safe_assets)]
 
-    # Construct Kelly portfolio weights
-    kelly_weights = construct_kelly_portfolio(price_df, window=60, cap=0.01, scale=True, target_vol=0.05)
-    
-    # Calculate momentum (signals)
-    momentum_scores, signals = ewma_momentum_signals(price_df)
+    # Step 2: Filter by volatility
+    stable_assets = filter_by_volatility(price_df=price_df)
+    price_df = price_df[price_df['Symbol'].isin(stable_assets)]
 
-    # Apply signal mask to Kelly weights
-    filtered_kelly_weights = apply_signal_mask(kelly_weights, signals)
+    # Step 3: Filter by trend
+    trending_assets = filter_by_trend(price_df=price_df)
+    price_df = price_df[price_df['Symbol'].isin(trending_assets)]
+
+    # Step 4: Filter by correlation
+    final_assets, corr_matrix = filter_by_correlation(price_df, corr_threshold=0.3)
+    final_price_df = price_df[price_df['Symbol'].isin(final_assets)]
+
+    momentum_df, signals = ewma_momentum_signals(final_price_df, span=60, threshold=0.002, min_days_above_thresh=5)
+    long_signals = signals.clip(lower=0)
     
-    # Backtest portfolio with fixed holding period
-    kelly_returns = backtest_weighted_signal_strategy(filtered_kelly_weights, price_df, holding_period=60)
+    weights = inverse_volatility_weights(final_price_df)
+    final_weights = long_signals * weights
+    final_weights = final_weights.div(final_weights.sum(axis=1).replace(0, np.nan), axis=0).fillna(0)
     
-    # Calculate performance metrics
-    metrics = performance_metrics(kelly_returns)
-    print("Cumulative Returns:", metrics['Cumulative Return'])
-    print("Annualized Return:", metrics['Annualized Return'])
-    print("Max Drawdown:", metrics['Max Drawdown'])
-    print("Volatility:", metrics['Volatility']) 
-    print("Sharpe Ratio:", metrics['Sharpe Ratio']) 
+    returns, metrics = backtest_metrics_close_to_close(price_df, final_weights)
+    
+    plot_performance(returns)
+
 
 if __name__ == '__main__':
-    run_pipeline()
+    run_pipeline(date = '2025-01-01')
     

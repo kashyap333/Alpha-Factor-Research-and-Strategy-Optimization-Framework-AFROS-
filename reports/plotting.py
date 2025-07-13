@@ -1,20 +1,6 @@
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
+import numpy as np
 
-def backtest_metrics_close_to_close(price_df, combined_weights, freq=252):
-    returns = backtest_close_to_close(price_df, combined_weights)
-    cumulative_return = (1 + returns).prod() - 1
-    annualized_return = (1 + cumulative_return) ** (freq / len(returns)) - 1
-    volatility = returns.std() * np.sqrt(freq)
-    sharpe = annualized_return / volatility if volatility != 0 else np.nan
-    metrics = {
-        "Cumulative Return": cumulative_return,
-        "Annualized Return": annualized_return,
-        "Annualized Volatility": volatility,
-        "Sharpe Ratio": sharpe,
-    }
-    return returns, metrics
 
 def plot_performance(portfolio_returns):
     """
