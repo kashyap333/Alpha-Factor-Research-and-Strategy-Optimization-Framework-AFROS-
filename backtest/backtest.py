@@ -3,18 +3,29 @@ import pandas as pd
 from reports.plotting import *
 import numpy as np
 
-def backtest_close_to_close(price_df, combined_weights):
+def backtest_close_to_close(price_df, combined_weights, allow_short=True):
     """
-    Backtest portfolio returns using close-to-close prices daily weight updates
+    Backtest portfolio returns using close-to-close prices.
 
     Args:
         price_df (DataFrame): Long format with Date index and Symbol column, must have 'Close'.
         combined_weights (DataFrame): Wide format, index=Date, columns=Symbols, daily weights.
+        allow_short (bool): If True, negative weights represent short positions. 
+                            If False, negative weights are set to zero (no shorting).
 
     Returns:
         pd.Series: Daily portfolio returns indexed by Date.
     """
+    # Filter price_df to only tickers present in combined_weights
+    tickers = combined_weights.columns
+    price_df = price_df[price_df['Symbol'].isin(tickers)].copy()
+
+    # Ensure 'Date' is the index and sorted
+    if price_df.index.name != 'Date':
+        price_df = price_df.set_index('Date')
     price_df = price_df.sort_index()
+    price_df = price_df.sort_values(['Date', 'Symbol'])  # sort by Symbol within Date for consistency
+
     all_dates = sorted(set(price_df.index.unique()) & set(combined_weights.index))
 
     portfolio_returns = []
@@ -30,6 +41,10 @@ def backtest_close_to_close(price_df, combined_weights):
             continue
 
         weights = combined_weights.loc[prev_date]
+
+        if not allow_short:
+            # Clip negative weights to zero (no shorting)
+            weights = weights.clip(lower=0)
 
         close_prev = price_df.loc[prev_date].set_index('Symbol')['Close']
         close_curr = price_df.loc[curr_date].set_index('Symbol')['Close']
@@ -56,6 +71,7 @@ def backtest_metrics_close_to_close(price_df, combined_weights, freq=252):
         "Sharpe Ratio": sharpe,
     }
     return returns, metrics
+
 
 
 def backtest_with_rebalancing(price_df, compute_combined_weights_fn, rebalance_freq=1, capital=100000, start_date=None, plot_progress=False):
