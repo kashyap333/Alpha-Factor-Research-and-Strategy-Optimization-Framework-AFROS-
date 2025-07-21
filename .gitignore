@@ -23,7 +23,7 @@ env/
 *.pkl
 .cache/
 *.log
-.csv
+*.csv
 
 # OS-generated files
 .DS_Store
