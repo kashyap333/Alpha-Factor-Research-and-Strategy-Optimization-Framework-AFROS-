@@ -10,7 +10,7 @@ sp500_df = tables[0]
 # Get the symbol list and fix formats for Yahoo Finance
 symbols = sp500_df['Symbol'].str.replace('.', '-', regex=False).tolist()
 today = datetime.datetime.today().date()
-master_file = 'Data/master_stock_data.csv'
+master_file = 'D:/Quant/afros/data/master_stock_data.csv'
 
 if os.path.exists(master_file):
     with open(master_file, 'r') as f:
@@ -110,7 +110,7 @@ bond_etfs = [
 ]
 
 today = datetime.datetime.today().date()
-master_file = 'Data/master_bond_etf_data.csv'
+master_file = 'D:/Quant/afros/data/master_bond_etf_data.csv'
 
 # Load existing master file if it exists
 if os.path.exists(master_file):
@@ -201,7 +201,7 @@ commodity_etfs = [
 ]
 
 today = datetime.datetime.today().date()
-master_file = 'Data/master_commodity_etf_data.csv'
+master_file = 'D:/Quant/afros/data/master_commodity_etf_data.csv'
 
 # Load existing master file if it exists
 if os.path.exists(master_file):
