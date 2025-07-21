@@ -271,3 +271,65 @@ if new_rows:
     print(f"Updated master commodity ETF data saved to {master_file}")
 else:
     print("All commodity ETFs are already up to date.")
+
+symbols = [
+    'EURUSD=X', 'GBPUSD=X', 'JPY=X', 'CHF=X',
+    'AUDUSD=X', 'CAD=X', 'NZDUSD=X'
+]
+
+today = datetime.datetime.today().date()
+master_file = 'Data/master_forex_data.csv'
+
+if os.path.exists(master_file):
+    with open(master_file, 'r') as f:
+        first_line = f.readline()
+        second_line = f.readline()
+
+    skiprows = [1] if 'Ticker' in second_line else []
+    master_df = pd.read_csv(master_file, parse_dates=['Date'], skiprows=skiprows)
+
+    expected = {'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Symbol'}
+    master_df = master_df[[col for col in master_df.columns if col in expected]]
+
+else:
+    master_df = pd.DataFrame(columns=['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Symbol'])
+
+new_rows = []
+
+for symbol in symbols:
+    symbol_df = master_df[master_df['Symbol'] == symbol] if not master_df.empty else pd.DataFrame()
+
+    if not symbol_df.empty:
+        last_date = symbol_df['Date'].max().date()
+        start_date = last_date + datetime.timedelta(days=1)
+    else:
+        start_date = datetime.date(2020, 1, 1)
+
+    if start_date >= today:
+        print(f"{symbol} is already up to date.")
+        continue
+
+    print(f"Downloading {symbol} from {start_date} to {today}")
+    new_data = yf.download(symbol, start=start_date, end=today + datetime.timedelta(days=1), auto_adjust=True)
+
+    if not new_data.empty:
+        if isinstance(new_data.columns, pd.MultiIndex):
+            new_data.columns = [col[0] for col in new_data.columns]
+
+        new_data = new_data.reset_index()
+        new_data['Symbol'] = symbol
+        new_rows.append(new_data)
+    else:
+        print(f"No new data for {symbol}.")
+
+if new_rows:
+    update_df = pd.concat(new_rows, ignore_index=True)
+
+    required_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Symbol']
+    update_df = update_df[[col for col in required_columns if col in update_df.columns]]
+
+    master_df = pd.concat([master_df, update_df], ignore_index=True)
+    master_df = master_df.drop_duplicates(subset=['Date', 'Symbol'])
+    master_df = master_df.sort_values(by=['Date', 'Symbol'])
+
+    master_df.to_csv(master_file, index=False)
