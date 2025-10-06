@@ -2,9 +2,15 @@ import yfinance as yf
 import pandas as pd
 import datetime
 import os
+import requests
 
 url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-tables = pd.read_html(url)
+
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+response = requests.get(url, headers=headers)
+tables = pd.read_html(response.text)
 sp500_df = tables[0]
 
 # Get the symbol list and fix formats for Yahoo Finance
@@ -43,7 +49,12 @@ for symbol in symbols:
         continue
 
     print(f"Downloading {symbol} from {start_date} to {today}")
-    new_data = yf.download(symbol, start=start_date, end=today + datetime.timedelta(days=1), auto_adjust=True, group_by='column')
+    try:
+        new_data = yf.download(symbol, start=start_date, end=today + datetime.timedelta(days=1),
+                            auto_adjust=True, group_by='column')
+    except Exception as e:
+        print(f"Failed to download {symbol}: {e}")
+        continue
 
     if not new_data.empty:
         # Flatten columns if MultiIndex
@@ -278,7 +289,7 @@ symbols = [
 ]
 
 today = datetime.datetime.today().date()
-master_file = 'Data/master_forex_data.csv'
+master_file = os.path.join(os.getcwd(), 'master_forex_data.csv')
 
 if os.path.exists(master_file):
     with open(master_file, 'r') as f:
@@ -333,3 +344,6 @@ if new_rows:
     master_df = master_df.sort_values(by=['Date', 'Symbol'])
 
     master_df.to_csv(master_file, index=False)
+    print(f"Updated master forex data saved to {master_file}")
+else:
+    print("All forex pairs are already up to date.")

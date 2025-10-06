@@ -21,7 +21,7 @@ def run_pipeline(date):
     price_df = price_df[price_df['Symbol'].isin(stable_assets)]
 
     # Step 3: Filter by trend
-    trending_assets = filter_by_trend(price_df=price_df)
+    trending_assets = filter_by_var(price_df=price_df)
     price_df = price_df[price_df['Symbol'].isin(trending_assets)]
 
     # Step 4: Filter by correlation
