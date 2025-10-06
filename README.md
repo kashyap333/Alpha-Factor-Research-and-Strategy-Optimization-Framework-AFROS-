@@ -15,6 +15,13 @@ AFROS is built to address the end-to-end lifecycle of a systematic strategy:
 The framework currently focuses on **momentum-based factor investing** and is designed to scale to include additional alpha factors (e.g., value, volatility, seasonality) and portfolio optimization models (e.g., mean-variance, Black-Litterman).
 
 ---
+## 📈 Strategy Performance
+
+Below is the cumulative performance and drawdown of the strategy:
+
+<p align="center">
+  <img src="charts/perf_dd.png" alt="Strategy Performance and Drawdown" width="700">
+</p>
 
 ## 🔧 Key Components
 
@@ -119,3 +126,12 @@ Quantitative strategy researcher & data scientist
 ## ⚡ Disclaimer
 
 This is a research project for educational purposes. It is **not** investment advice. Always validate strategies with professional risk management before deployment.
+
+## Strategy Performance\n\n![Strategy Performance](charts/strategy_performance.png)
+\n
+
+## Strategy Performance\n\n![Strategy Performance](charts/strategy_performance.png)
+\n
+
+## Strategy Performance\n\n![Strategy Performance](charts/strategy_performance.png)
+\n
